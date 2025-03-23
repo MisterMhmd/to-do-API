@@ -1,86 +1,122 @@
-import { createServer } from "http";
-const port = 4040;
+const expressjs = require('express');
+const fs = require('fs');
+const app = expressjs();
+const port = process.env.port; //port from the .env file
 
-const tasks = [
-    {id: 1, task_status: "completed", name:"task1"},
-    {id: 2, task_status: "completed", name:"task2"},
-    {id: 3, task_status: "pending", name:"task3"},
-    {id: 4, task_status: "pending", name:"task4"}
-]
+app.use(expressjs.json());
 
-const getUserByIdHandler = (req, res) => {
-    const id = req.url.split('/')[3];
-    const task = tasks.find((task) => task.id === parseInt(id));
-  
-    if (task) {
-      res.write(JSON.stringify(task));
+
+//reading the file at the start of the program
+let tasks = [];
+fs.readFile('./tasks.json', 'utf-8', (err, jsonstring) => {
+    if (err) {
+        console.log(err);
     } else {
-      res.statusCode = 404;
-      res.write(JSON.stringify({ message: 'User not found' }));
+        tasks =  JSON.parse(jsonstring);
     }
-    res.end();
-};
+})
 
+//get for displaying all tasks
+app.get("/tasks", (req, res) => {
+    res.setHeader("content-type", "application/json");
+    res.send(tasks)
+});
 
-const getUsersHandler = (req, res) => {
-    res.write(JSON.stringify(tasks));
-    res.end();
-};
+//get for only displaying tasks based on the id
+app.get("/tasks/:id", (req, res) => {
+    const id = tasks.find(c => c.id === parseInt(req.params.id));
+    if (!id){
+        res.status(404).send("ID not found!")
+    } else {
+        res.send(id);
+    }
+})
 
-const jsonMiddleware = (req, res, next) => {
-    res.setHeader('Content-Type', 'application/json');
-    next();
-  };
-
-const logger = (req, res, next) => {
-    console.log(`${req.method} ${req.url}`);
-    next();
-};
-
-
-const notFoundHandler = (req, res) => {
-    res.statusCode = 404;
-    res.write(JSON.stringify({ message: 'Not Found' }));
-    res.end();
-};
-
-
-
-const createUserHandler = (req, res) => {
-    let body = '';
-    req.on('data', (chunk) => {
-      body += chunk.toString();
-    });
-    req.on('end', () => {
-        const newUser = JSON.parse(body)
-        tasks.push(newUser);
-        res.statusCode = 201;
-        res.write(JSON.stringify(newUser));
-        res.end();
-    });
-};
-
-
-const server = createServer((req, res) => {
-    logger(req, res, () => {
-      jsonMiddleware(req, res, () => {
-        if (req.url === '/tasks' && req.method === 'GET') {
-          getUsersHandler(req, res);
-        } else if (
-          req.url.match(/\/tasks\/id\/([0-9]+)/) &&
-          req.method === 'GET'
-        ) {
-          getUserByIdHandler(req, res);
-        } else if (req.url === '/tasks' && req.method === 'POST') {
-          createUserHandler(req, res);
-        } else {
-          notFoundHandler(req, res);
+//post for adding tasks
+app.post("/tasks", (req, res) => {
+    if (!req.body.name) {
+        res.status(400).send("No name input found! try again!");
+        return;
         }
-      });
-    });
-  });
-  
 
-server.listen(port, () => {
-    console.log(`Server running on port ${port}`);
+    const body = {
+        id: tasks.length + 1,
+        task_status: "pending",
+        name: req.body.name
+    }
+
+    tasks.push(body);
+    
+    fs.writeFile("./tasks.json", JSON.stringify(tasks, null, 2), (err) => {
+        if (err) {
+            console.log(err);
+            res.status(500).json({ error: "Could not save task"})
+        } else {
+            console.log("tasks added successfully!");
+            res.statusCode = 201;
+            res.write(JSON.stringify(body));
+            res.end();
+        }
+    });
+});
+
+
+//put for updating the status of the task
+app.put("/tasks/:id", (req, res) => {
+    const id = tasks.find(c => c.id === parseInt(req.params.id));
+    if (!id){
+        res.status(404).send("ID not found!")
+    } else if (req.body.task_status === "completed") { //if the tasks are marked as completed, update
+        id.task_status = "completed";
+    
+        fs.writeFile("./tasks.json", JSON.stringify(tasks, null, 2), (err) => {
+            if (err) {
+                console.log(err);
+                res.status(500).json({ error: "Could not update task"})
+            } else {
+                console.log("Task updated successfully!");
+                res.statusCode = 201;
+                res.send(id);
+                res.end();
+            }
+        });
+    } else {
+        res.send("invalid input! Try again");
+    }
+});
+
+
+
+//delete for deleting a task based on its id
+app.delete("/tasks/:id", (req, res) => {
+    const id = tasks.find(c => c.id === parseInt(req.params.id));
+    if (!id){
+        res.status(404).send("ID not found!")
+    } else {
+        const index = tasks.indexOf(id);
+        tasks.splice(index, 1);
+
+        tasks.forEach((tasks, i) => { //rearrange the ids of the tasks after deleting a task
+            tasks.id = i + 1;
+        });
+
+        //updating changes to the json file
+        fs.writeFile("./tasks.json", JSON.stringify(tasks, null, 2), (err) => {
+            if (err) {
+                console.log(err);
+                res.status(500).json({ error: "Could not update task"})
+            } else {
+                console.log("Tasks updated successfully!");
+                res.statusCode = 201;
+                res.send(id);
+                res.end();
+            }
+        });
+    }
+})
+
+
+//server
+app.listen(port, () => {
+    console.log(`listening at port ${port}`);
 });
