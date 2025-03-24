@@ -1,13 +1,15 @@
 const expressjs = require('express');
+const uuid4 = require('uuid');
 const fs = require('fs');
 const app = expressjs();
-const port = process.env.port; //port from the .env file
+const PORT = process.env.PORT; //port from the .env file
 
 app.use(expressjs.json());
 
 
 //reading the file at the start of the program
 let tasks = [];
+
 fs.readFile('./tasks.json', 'utf-8', (err, jsonstring) => {
     if (err) {
         console.log(err);
@@ -16,6 +18,17 @@ fs.readFile('./tasks.json', 'utf-8', (err, jsonstring) => {
     }
 })
 
+const WriteFile = (task) => {
+    fs.writeFile("./tasks.json", JSON.stringify(tasks, null, 2), (err) => {
+        if (err) {
+            console.log(err);
+            res.status(500).json({ error: "Could not save task"})
+        } else {
+            console.log("Operation Successful!");
+        }
+    });
+}
+
 //get for displaying all tasks
 app.get("/tasks", (req, res) => {
     res.setHeader("content-type", "application/json");
@@ -23,12 +36,12 @@ app.get("/tasks", (req, res) => {
 });
 
 //get for only displaying tasks based on the id
-app.get("/tasks/:id", (req, res) => {
-    const id = tasks.find(c => c.id === parseInt(req.params.id));
-    if (!id){
-        res.status(404).send("ID not found!")
+app.get("/tasks/:number", (req, res) => {
+    const task = tasks.find(task => task.number === parseInt(req.params.number));
+    if (!task){
+        res.status(404).send("Task not found!")
     } else {
-        res.send(id);
+        res.send(task);
     }
 })
 
@@ -40,46 +53,34 @@ app.post("/tasks", (req, res) => {
         }
 
     const body = {
-        id: tasks.length + 1,
+        number: tasks.length + 1,
+        id: uuid4.v4(),
         task_status: "pending",
         name: req.body.name
     }
 
     tasks.push(body);
-    
-    fs.writeFile("./tasks.json", JSON.stringify(tasks, null, 2), (err) => {
-        if (err) {
-            console.log(err);
-            res.status(500).json({ error: "Could not save task"})
-        } else {
-            console.log("tasks added successfully!");
-            res.statusCode = 201;
-            res.write(JSON.stringify(body));
-            res.end();
-        }
-    });
+    const Jsonbody = JSON.stringify(body);
+
+    WriteFile(Jsonbody);
+    res.statusCode = 201;
+    res.send(body);
+    res.end();
 });
 
 
 //put for updating the status of the task
 app.put("/tasks/:id", (req, res) => {
-    const id = tasks.find(c => c.id === parseInt(req.params.id));
-    if (!id){
-        res.status(404).send("ID not found!")
-    } else if (req.body.task_status === "completed") { //if the tasks are marked as completed, update
-        id.task_status = "completed";
+    const task = tasks.find(task => task.id === req.params.id);
+    if (!task){
+        res.status(404).send("Task not found!")
+    } else if (req.body.task_status) { //if the tasks are marked as completed, update
+        task.task_status = req.body.task_status;
     
-        fs.writeFile("./tasks.json", JSON.stringify(tasks, null, 2), (err) => {
-            if (err) {
-                console.log(err);
-                res.status(500).json({ error: "Could not update task"})
-            } else {
-                console.log("Task updated successfully!");
-                res.statusCode = 201;
-                res.send(id);
-                res.end();
-            }
-        });
+        WriteFile(task);
+        res.statusCode = 201;
+        res.send(task);
+        res.end();
     } else {
         res.send("invalid input! Try again");
     }
@@ -89,34 +90,27 @@ app.put("/tasks/:id", (req, res) => {
 
 //delete for deleting a task based on its id
 app.delete("/tasks/:id", (req, res) => {
-    const id = tasks.find(c => c.id === parseInt(req.params.id));
-    if (!id){
-        res.status(404).send("ID not found!")
+    const task = tasks.find(task => task.id === req.params.id);
+    if (!task){
+        res.status(404).send("task not found!")
     } else {
-        const index = tasks.indexOf(id);
+        const index = tasks.indexOf(task);
         tasks.splice(index, 1);
 
         tasks.forEach((tasks, i) => { //rearrange the ids of the tasks after deleting a task
-            tasks.id = i + 1;
+            tasks.number = i + 1;
         });
 
         //updating changes to the json file
-        fs.writeFile("./tasks.json", JSON.stringify(tasks, null, 2), (err) => {
-            if (err) {
-                console.log(err);
-                res.status(500).json({ error: "Could not update task"})
-            } else {
-                console.log("Tasks updated successfully!");
-                res.statusCode = 201;
-                res.send(id);
-                res.end();
-            }
-        });
+        WriteFile(task);
+        res.statusCode = 201;
+        res.send(task);
+        res.end();
     }
 })
 
 
 //server
-app.listen(port, () => {
-    console.log(`listening at port ${port}`);
+app.listen(PORT, () => {
+    console.log(`listening at port ${PORT}`);
 });
