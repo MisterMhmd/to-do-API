@@ -18,7 +18,7 @@ fs.readFile('./tasks.json', 'utf-8', (err, jsonstring) => {
     }
 })
 
-const WriteFile = (task) => {
+const WriteFile = (task, res) => {
     fs.writeFile("./tasks.json", JSON.stringify(tasks, null, 2), (err) => {
         if (err) {
             console.log(err);
@@ -36,8 +36,8 @@ app.get("/tasks", (req, res) => {
 });
 
 //get for only displaying tasks based on the id
-app.get("/tasks/:number", (req, res) => {
-    const task = tasks.find(task => task.number === parseInt(req.params.number));
+app.get("/tasks/:id", (req, res) => {
+    const task = tasks.find(task => task.id === parseInt(req.params.id));
     if (!task){
         res.status(404).send("Task not found!")
     } else {
@@ -53,7 +53,6 @@ app.post("/tasks", (req, res) => {
         }
 
     const body = {
-        number: tasks.length + 1,
         id: uuid4.v4(),
         task_status: "pending",
         name: req.body.name
@@ -62,7 +61,7 @@ app.post("/tasks", (req, res) => {
     tasks.push(body);
     const Jsonbody = JSON.stringify(body);
 
-    WriteFile(Jsonbody);
+    WriteFile(Jsonbody, res);
     res.statusCode = 201;
     res.send(body);
     res.end();
@@ -77,7 +76,7 @@ app.put("/tasks/:id", (req, res) => {
     } else if (req.body.task_status) { //if the tasks are marked as completed, update
         task.task_status = req.body.task_status;
     
-        WriteFile(task);
+        WriteFile(task, res);
         res.statusCode = 201;
         res.send(task);
         res.end();
@@ -97,12 +96,8 @@ app.delete("/tasks/:id", (req, res) => {
         const index = tasks.indexOf(task);
         tasks.splice(index, 1);
 
-        tasks.forEach((tasks, i) => { //rearrange the ids of the tasks after deleting a task
-            tasks.number = i + 1;
-        });
-
         //updating changes to the json file
-        WriteFile(task);
+        WriteFile(task, res);
         res.statusCode = 201;
         res.send(task);
         res.end();
