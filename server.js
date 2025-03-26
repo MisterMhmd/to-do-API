@@ -37,7 +37,7 @@ app.get("/tasks", (req, res) => {
 
 //get for only displaying tasks based on the id
 app.get("/tasks/:id", (req, res) => {
-    const task = tasks.find(task => task.id === parseInt(req.params.id));
+    const task = tasks.find(task => task.id === req.params.id);
     if (!task){
         res.status(404).send("Task not found!")
     } else {
